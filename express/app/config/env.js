@@ -1,10 +1,21 @@
 import 'dotenv/config'
 
+/**
+ * Parses an environment variable as an integer with a default value
+ * @param {string} name - Environment variable name
+ * @param {number} defaultValue - Default value if variable is not set or invalid
+ * @returns {number} Parsed integer value or default value
+ */
 function getInt(name, defaultValue) {
   const value = process.env[name];
   return value ? parseInt(value, 10) : defaultValue;
 }
 
+/**
+ * Environment variables configuration object
+ * All values are loaded from process.env with fallback defaults
+ * @type {Object}
+ */
 export const env = {
   // Server configuration
   nodeEnv: process.env.NODE_ENV ?? 'development',

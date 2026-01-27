@@ -1,7 +1,14 @@
 import { env } from './env.js';
 import { serverConfig } from './server.config.js';
 
-// Helper to convert time string to milliseconds
+/**
+ * Converts time string (e.g., '5m', '1h', '30s') to milliseconds
+ * @param {string} timeString - Time string with unit suffix (s, m, h, d)
+ * @returns {number} Time in milliseconds
+ * @example
+ * timeToMs('5m') // returns 300000
+ * timeToMs('1h') // returns 3600000
+ */
 function timeToMs(timeString) {
   const unit = timeString.slice(-1);
   const value = parseInt(timeString.slice(0, -1), 10);

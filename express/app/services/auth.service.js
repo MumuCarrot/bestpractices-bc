@@ -3,25 +3,36 @@ import * as argon2 from 'argon2';
 import { argon2Config } from '../config/argon2.config.js';
 import { appConfig } from '../config/app.config.js';
 import jwt from 'jsonwebtoken';
-import { validateLogin, validatePassword } from '../utils/validators.js';
+
+/**
+ * Generates a pair of access and refresh tokens for a user
+ * @param {string|number} userId - User ID
+ * @returns {{accessToken: string, refreshToken: string}} Object containing access and refresh tokens
+ */
+function generateTokens(userId) {
+  const payload = { userId };
+  
+  const accessToken = jwt.sign(payload, appConfig.secretKey, { 
+    expiresIn: appConfig.accessTokenExpiresIn 
+  });
+  
+  const refreshToken = jwt.sign(payload, appConfig.secretKey, { 
+    expiresIn: appConfig.refreshTokenExpiresIn 
+  });
+  
+  return { accessToken, refreshToken };
+}
 
 export const authService = {
+  /**
+   * Registers a new user and generates authentication tokens
+   * @param {string} login - User login (validated by schema)
+   * @param {string} password - User password (validated by schema)
+   * @returns {Promise<{success: boolean, data?: any, accessToken?: string, refreshToken?: string, error?: Error}>}
+   * Returns success status, user data, and tokens on success, or error on failure
+   */
   async register(login, password) {
-    // Validate login and password
-    if (!validateLogin(login)) {
-      return { 
-        success: false, 
-        error: new Error('Invalid login') 
-      };
-    }
-    if (!validatePassword(password)) {
-      return { 
-        success: false, 
-        error: new Error('Invalid password') 
-      };
-    }
-
-    // Hash password
+    // Hash password using Argon2
     const hashedPassword = await argon2.hash(password, {
       type: argon2.argon2id,
       memoryCost: argon2Config.memoryCost,
@@ -29,7 +40,7 @@ export const authService = {
       parallelism: argon2Config.parallelism,
     });
     
-    // Create user
+    // Create user in database
     const { data, error } = await usersRepository.create({ 
       login, 
       password: hashedPassword 
@@ -42,30 +53,21 @@ export const authService = {
       };
     }
 
-    // Generate tokens
-    const accessToken = jwt.sign({ userId: data.id }, appConfig.secretKey, { expiresIn: appConfig.accessTokenExpiresIn });
-    const refreshToken = jwt.sign({ userId: data.id }, appConfig.secretKey, { expiresIn: appConfig.refreshTokenExpiresIn });
+    // Generate authentication tokens
+    const { accessToken, refreshToken } = generateTokens(data.id);
 
-    // Return tokens
     return { success: true, data, accessToken, refreshToken };
   },
 
+  /**
+   * Authenticates a user and generates authentication tokens
+   * @param {string} login - User login (validated by schema)
+   * @param {string} password - User password (validated by schema)
+   * @returns {Promise<{success: boolean, data?: any, accessToken?: string, refreshToken?: string, error?: Error}>}
+   * Returns success status, user data (without password), and tokens on success, or error on failure
+   */
   async login(login, password) {
-    // Validate login and password
-    if (!validateLogin(login)) {
-      return { 
-        success: false, 
-        error: new Error('Invalid login') 
-      };
-    }
-    if (!validatePassword(password)) {
-      return { 
-        success: false, 
-        error: new Error('Invalid password') 
-      };
-    }
-    
-    // Find user
+    // Find user by login
     const { data: user, error: findError } = await usersRepository.findByLogin(login);
 
     if (findError || !user) {
@@ -75,7 +77,7 @@ export const authService = {
       };
     }
 
-    // Verify password
+    // Verify password against stored hash
     const isPasswordValid = await argon2.verify(user.password, password);
 
     if (!isPasswordValid) {
@@ -85,44 +87,68 @@ export const authService = {
       };
     }
 
-    // Remove password from response
+    // Remove password from response for security
     const { password: _, ...userWithoutPassword } = user;
 
-    // Generate tokens
-    const accessToken = jwt.sign({ userId: user.id }, appConfig.secretKey, { expiresIn: appConfig.accessTokenExpiresIn });
-    const refreshToken = jwt.sign({ userId: user.id }, appConfig.secretKey, { expiresIn: appConfig.refreshTokenExpiresIn });
+    // Generate authentication tokens
+    const { accessToken, refreshToken } = generateTokens(user.id);
     
-    // Return tokens
     return { success: true, data: userWithoutPassword, accessToken, refreshToken };
   },
 
-  async refreshToken(refreshToken) {
-    // Verify refresh token
-    const decoded = jwt.verify(refreshToken, appConfig.secretKey);
-    if (!decoded) {
+  /**
+   * Refreshes authentication tokens using a valid refresh token
+   * @param {string} token - Refresh token from cookies
+   * @returns {Promise<{success: boolean, data?: any, accessToken?: string, refreshToken?: string, error?: Error}>}
+   * Returns success status, user data (without password), and new tokens on success, or error on failure
+   */
+  async refreshToken(token) {
+    try {
+      // Verify refresh token (throws error if invalid or expired)
+      const decoded = jwt.verify(token, appConfig.secretKey);
+      
+      if (!decoded || !decoded.userId) {
+        return { 
+          success: false, 
+          error: new Error('Invalid refresh token') 
+        };
+      }
+
+      // Find user by ID from token
+      const { data: user, error: findError } = await usersRepository.findById(decoded.userId);
+      if (findError || !user) {
+        return { 
+          success: false, 
+          error: new Error('User not found') 
+        };
+      }
+
+      // Remove password from response for security
+      const { password: _, ...userWithoutPassword } = user;
+
+      // Generate new authentication tokens
+      const { accessToken, refreshToken: newRefreshToken } = generateTokens(user.id);
+      
+      return { success: true, data: userWithoutPassword, accessToken, refreshToken: newRefreshToken };
+    } catch (error) {
+      // Handle JWT errors (expired, invalid signature, etc.)
+      if (error.name === 'TokenExpiredError') {
+        return { 
+          success: false, 
+          error: new Error('Refresh token has expired') 
+        };
+      }
+      if (error.name === 'JsonWebTokenError') {
+        return { 
+          success: false, 
+          error: new Error('Invalid refresh token') 
+        };
+      }
+      // Handle other unexpected errors
       return { 
         success: false, 
-        error: new Error('Invalid refresh token') 
+        error: new Error('Failed to verify refresh token') 
       };
     }
-
-    // Search user
-    const { data: user, error: findError } = await usersRepository.findById(decoded.userId);
-    if (findError || !user) {
-      return { 
-        success: false, 
-        error: new Error('User not found') 
-      };
-    }
-
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
-
-    // Generate tokens
-    const accessToken = jwt.sign({ userId: user.id }, appConfig.secretKey, { expiresIn: appConfig.accessTokenExpiresIn });
-    const refreshToken = jwt.sign({ userId: user.id }, appConfig.secretKey, { expiresIn: appConfig.refreshTokenExpiresIn });
-    
-    // Return tokens
-    return { success: true, data: userWithoutPassword, accessToken, refreshToken };
   }
 };
