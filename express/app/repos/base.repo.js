@@ -32,7 +32,7 @@ export function createRepository(table) {
      * @returns {Promise<{data: any, error: any}>} Supabase response with created data and error
      */
     async create(data) {
-      return supabase.from(table).insert(data)
+      return supabase.from(table).insert(data).select().single()
     },
 
     /**
@@ -42,7 +42,7 @@ export function createRepository(table) {
      * @returns {Promise<{data: any, error: any}>} Supabase response with updated data and error
      */
     async update(id, data) {
-      return supabase.from(table).update(data).eq('id', id)
+      return supabase.from(table).update(data).eq('id', id).select().single()
     },
 
     /**

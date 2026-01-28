@@ -3,6 +3,7 @@ import * as argon2 from 'argon2';
 import { argon2Config } from '../config/argon2.config.js';
 import { appConfig } from '../config/app.config.js';
 import jwt from 'jsonwebtoken';
+import { log } from '../utils/logger.js';
 
 /**
  * Generates a pair of access and refresh tokens for a user
@@ -45,8 +46,13 @@ export const authService = {
       login, 
       password: hashedPassword 
     });
-
+    console.log(error)
     if (error) {
+      log.error('Failed to register user', {
+        login,
+        error: error.message,
+      });
+      
       return { 
         success: false, 
         error: new Error(`Failed to register user: ${error.message}`) 
@@ -55,6 +61,11 @@ export const authService = {
 
     // Generate authentication tokens
     const { accessToken, refreshToken } = generateTokens(data.id);
+
+    log.info('User registered successfully', {
+      userId: data.id,
+      login,
+    });
 
     return { success: true, data, accessToken, refreshToken };
   },
@@ -71,6 +82,10 @@ export const authService = {
     const { data: user, error: findError } = await usersRepository.findByLogin(login);
 
     if (findError || !user) {
+      log.warn('Login attempt failed - user not found', {
+        login,
+      });
+      
       return { 
         success: false, 
         error: new Error('Invalid login or password') 
@@ -81,6 +96,11 @@ export const authService = {
     const isPasswordValid = await argon2.verify(user.password, password);
 
     if (!isPasswordValid) {
+      log.warn('Login attempt failed - invalid password', {
+        login,
+        userId: user.id,
+      });
+      
       return { 
         success: false, 
         error: new Error('Invalid login or password') 
@@ -92,6 +112,11 @@ export const authService = {
 
     // Generate authentication tokens
     const { accessToken, refreshToken } = generateTokens(user.id);
+    
+    log.info('User logged in successfully', {
+      userId: user.id,
+      login,
+    });
     
     return { success: true, data: userWithoutPassword, accessToken, refreshToken };
   },
@@ -108,6 +133,8 @@ export const authService = {
       const decoded = jwt.verify(token, appConfig.secretKey);
       
       if (!decoded || !decoded.userId) {
+        log.warn('Refresh token failed - invalid token structure');
+        
         return { 
           success: false, 
           error: new Error('Invalid refresh token') 
@@ -117,6 +144,10 @@ export const authService = {
       // Find user by ID from token
       const { data: user, error: findError } = await usersRepository.findById(decoded.userId);
       if (findError || !user) {
+        log.warn('Refresh token failed - user not found', {
+          userId: decoded.userId,
+        });
+        
         return { 
           success: false, 
           error: new Error('User not found') 
@@ -129,22 +160,38 @@ export const authService = {
       // Generate new authentication tokens
       const { accessToken, refreshToken: newRefreshToken } = generateTokens(user.id);
       
+      log.info('Tokens refreshed successfully', {
+        userId: user.id,
+      });
+      
       return { success: true, data: userWithoutPassword, accessToken, refreshToken: newRefreshToken };
     } catch (error) {
       // Handle JWT errors (expired, invalid signature, etc.)
       if (error.name === 'TokenExpiredError') {
+        log.warn('Refresh token failed - token expired');
+        
         return { 
           success: false, 
           error: new Error('Refresh token has expired') 
         };
       }
       if (error.name === 'JsonWebTokenError') {
+        log.warn('Refresh token failed - invalid token', {
+          error: error.message,
+        });
+        
         return { 
           success: false, 
           error: new Error('Invalid refresh token') 
         };
       }
+      
       // Handle other unexpected errors
+      log.error('Refresh token failed - unexpected error', {
+        error: error.message,
+        stack: error.stack,
+      });
+      
       return { 
         success: false, 
         error: new Error('Failed to verify refresh token') 
