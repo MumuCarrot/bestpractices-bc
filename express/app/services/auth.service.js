@@ -4,25 +4,7 @@ import { argon2Config } from '../config/argon2.config.js';
 import { appConfig } from '../config/app.config.js';
 import jwt from 'jsonwebtoken';
 import { log } from '../utils/logger.js';
-
-/**
- * Generates a pair of access and refresh tokens for a user
- * @param {string|number} userId - User ID
- * @returns {{accessToken: string, refreshToken: string}} Object containing access and refresh tokens
- */
-function generateTokens(userId) {
-  const payload = { userId };
-  
-  const accessToken = jwt.sign(payload, appConfig.secretKey, { 
-    expiresIn: appConfig.accessTokenExpiresIn 
-  });
-  
-  const refreshToken = jwt.sign(payload, appConfig.secretKey, { 
-    expiresIn: appConfig.refreshTokenExpiresIn 
-  });
-  
-  return { accessToken, refreshToken };
-}
+import { generateTokens } from '../utils/jwt.js';
 
 export const authService = {
   /**
