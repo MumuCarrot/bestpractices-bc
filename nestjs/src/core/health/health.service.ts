@@ -3,16 +3,21 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class HealthService {
   /**
-   * Basic health check
-   * @returns {object} Health check status
+   * Performs a basic health check.
+   * Returns a simple status object indicating the service is operational.
+   *
+   * @returns {{status: string}} Health check status object
    */
   check() {
     return { status: 'Health check successful' };
   }
 
   /**
-   * Supabase database connection health check
-   * @returns {Promise<object>} Supabase connection status
+   * Performs a health check for Supabase database connection.
+   * Currently returns a successful status (implementation pending).
+   *
+   * @returns {Promise<{status: string, error?: string}>} Promise resolving to health check status object.
+   * Returns status 'failed' with error message if connection check fails.
    */
   async checkSupabase(): Promise<{ status: string; error?: string }> {
     try {

@@ -1,98 +1,322 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# NestJS Best Practices Project
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This project demonstrates modern best practices for building NestJS applications with a focus on security, maintainability, and scalability.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Architecture Overview
 
-## Description
+The project follows a **modular architecture** pattern with clear separation of concerns using NestJS modules:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+src/
+├── core/              # Core business modules
+│   ├── auth/         # Authentication module
+│   ├── database/     # Database module with repositories
+│   ├── health/       # Health check module
+│   └── logger/       # Logging module
+├── common/           # Shared utilities
+│   └── utils/        # Utility functions
+└── main.ts           # Application entry point
 ```
 
-## Compile and run the project
+## Implemented Best Practices
 
-```bash
-# development
-$ npm run start
+### 1. **Modular Architecture**
 
-# watch mode
-$ npm run start:dev
+- **Modules**: Feature-based modules (AuthModule, DatabaseModule, LoggerModule, HealthModule)
+- **Controllers**: Handle HTTP requests/responses and route definitions
+- **Services**: Contain business logic and orchestration
+- **Repositories**: Abstract data access operations using Repository pattern
+- **Providers**: Dependency injection for database clients and utilities
 
-# production mode
-$ npm run start:prod
+### 2. **Repository Pattern**
+
+- Base repository (`base.repo.ts`) provides common CRUD operations
+- Specific repositories extend base functionality
+- Abstracts database implementation details
+- Promotes code reusability and testability
+
+**Example:**
+```typescript
+@Injectable()
+export class UserRepository extends BaseRepository {
+  constructor(@Inject(SUPABASE_CLIENT) supabase: SupabaseClient) {
+    super(supabase, 'users');
+  }
+
+  async findByLogin(login: string) { /* custom logic */ }
+}
 ```
 
-## Run tests
+### 3. **Configuration Management**
 
-```bash
-# unit tests
-$ npm run test
+- **@nestjs/config** for centralized configuration
+- Environment variables with sensible defaults
+- Type-safe configuration using ConfigService
+- Global configuration module
 
-# e2e tests
-$ npm run test:e2e
+**Features:**
+- Environment variable parsing with defaults
+- Configuration validation
+- Production/development mode detection
+- Secure configuration access
 
-# test coverage
-$ npm run test:cov
+### 4. **Dependency Injection**
+
+- NestJS built-in dependency injection system
+- Constructor-based injection
+- Provider tokens for database clients
+- Modular service registration
+
+**Example:**
+```typescript
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly passwordUtil: PasswordUtil,
+    private readonly userRepository: UserRepository,
+    private readonly jwtUtil: JwtUtil,
+    private readonly logger: LoggerService,
+  ) {}
+}
 ```
 
-## Deployment
+### 5. **Security Best Practices**
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+#### Password Security
+- **Argon2** password hashing (argon2id variant)
+- Configurable memory, time, and parallelism costs via environment variables
+- Protection against timing attacks
+- Secure password verification
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+#### Authentication
+- **JWT** tokens for stateless authentication
+- Separate access and refresh tokens with different expiration times
+- HTTP-only cookies for token storage
+- Secure cookie options (httpOnly, secure, sameSite)
+- Token refresh mechanism
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+#### Security Features
+- Passwords never exposed in responses
+- Token expiration handling
+- Secure cookie configuration based on environment
+- Error messages don't leak sensitive information
+
+### 6. **Error Handling**
+
+- Consistent error response format
+- Proper HTTP status codes using HttpException
+- Detailed error messages for debugging
+- Graceful error handling in async operations
+- Service-level error handling with logging
+
+**Response Format:**
+```typescript
+{
+  success: boolean,
+  data?: any,
+  error?: Error,
+  accessToken?: string,
+  refreshToken?: string
+}
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 7. **Code Documentation**
 
-## Resources
+- **JSDoc** comments for all functions, methods, and classes
+- TypeScript type annotations for better IDE support
+- Parameter and return value documentation
+- Usage examples where appropriate
+- Comprehensive method descriptions
 
-Check out a few resources that may come in handy when working with NestJS:
+### 8. **Logging**
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+- **Winston** logger integration
+- Structured logging with metadata
+- Multiple log levels (error, warn, info, debug)
+- File-based logging (error.log, combined.log)
+- HTTP request/response logging interceptor
+- Environment-aware log levels
 
-## Support
+**Features:**
+- Console output in development
+- JSON file logging for production
+- Exception and rejection handlers
+- Request/response time tracking
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### 9. **Database Abstraction**
 
-## Stay in touch
+- Supabase client abstraction via providers
+- Consistent query patterns through repositories
+- Error handling at repository level
+- Easy to swap database implementations
+- Type-safe database operations
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### 10. **TypeScript Best Practices**
 
-## License
+- Strict TypeScript configuration
+- Type-safe code throughout
+- Interface definitions for contracts
+- Generic types for reusability
+- Modern ES6+ features
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Project Structure
+
+```
+nestjs/
+├── src/
+│   ├── core/                        # Core business modules
+│   │   ├── auth/                    # Authentication module
+│   │   │   ├── auth.controller.ts  # Auth endpoints
+│   │   │   ├── auth.module.ts      # Auth module definition
+│   │   │   └── auth.service.ts     # Auth business logic
+│   │   ├── database/                # Database module
+│   │   │   ├── database.module.ts   # Database module definition
+│   │   │   ├── supabase.provider.ts # Supabase client provider
+│   │   │   └── repos/              # Repository layer
+│   │   │       ├── base.repo.ts    # Base repository
+│   │   │       └── user.repo.ts    # User repository
+│   │   ├── health/                  # Health check module
+│   │   │   ├── health.controller.ts
+│   │   │   ├── health.module.ts
+│   │   │   └── health.service.ts
+│   │   └── logger/                  # Logging module
+│   │       ├── logger.module.ts
+│   │       ├── logger.service.ts
+│   │       └── logger.interceptor.ts
+│   ├── common/                      # Shared utilities
+│   │   └── utils/                   # Utility functions
+│   │       ├── crypto.util.ts      # Cryptographic utilities
+│   │       ├── jwt.util.ts         # JWT token utilities
+│   │       └── password.util.ts    # Password hashing utilities
+│   ├── app.module.ts                # Root application module
+│   └── main.ts                      # Application entry point
+├── .env.example                     # Environment variables template
+├── package.json                     # Dependencies and scripts
+├── tsconfig.json                    # TypeScript configuration
+└── README.md                        # This file
+```
+
+## Key Dependencies
+
+- **@nestjs/common**: Core NestJS framework
+- **@nestjs/core**: NestJS core functionality
+- **@nestjs/config**: Configuration management
+- **@nestjs/platform-express**: Express platform adapter
+- **@supabase/supabase-js**: Database client
+- **argon2**: Password hashing
+- **winston**: Logging library
+- **cookie-parser**: Cookie parsing middleware
+- **reflect-metadata**: Metadata reflection for decorators
+- **rxjs**: Reactive programming library
+
+## Getting Started
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Copy `.env.example` to `.env` and configure:
+```bash
+cp .env.example .env
+```
+
+3. Set required environment variables:
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_SERVICE_KEY` - Supabase service role key
+- `SECRET_KEY` - Secret key for JWT token signing
+- `ACCESS_TOKEN_EXPIRES_IN` - Access token expiration (default: 5m)
+- `REFRESH_TOKEN_EXPIRES_IN` - Refresh token expiration (default: 1h)
+- `ARGON2_MEMORY_COST` - Argon2 memory cost (default: 65536)
+- `ARGON2_TIME_COST` - Argon2 time cost (default: 3)
+- `ARGON2_PARALLELISM` - Argon2 parallelism (default: 1)
+- `NODE_ENV` - Environment (development/production)
+- `PORT` - Server port (optional, defaults to 3000)
+
+4. Build the project:
+```bash
+npm run build
+```
+
+5. Start the server:
+```bash
+# Development mode with watch
+npm run start:dev
+
+# Production mode
+npm run start:prod
+
+# Debug mode
+npm run start:debug
+```
+
+## API Endpoints
+
+### Authentication
+- `POST /auth/register` - Register a new user
+  - Body: `{ login: string, password: string }`
+  - Returns: User data and sets HTTP-only cookies with tokens
+
+- `POST /auth/login` - Authenticate user
+  - Body: `{ login: string, password: string }`
+  - Returns: User data (without password) and sets HTTP-only cookies with tokens
+
+- `GET /auth/refresh-token` - Refresh authentication tokens
+  - Uses refresh token from HTTP-only cookie
+  - Returns: User data and sets new HTTP-only cookies with tokens
+
+### Health Check
+- `GET /health` - Server health status
+- `GET /health/supabase` - Supabase database connection health check
+
+## Development
+
+### Code Formatting
+```bash
+npm run format
+```
+
+### Linting
+```bash
+npm run lint
+```
+
+### Testing
+```bash
+# Unit tests
+npm run test
+
+# Watch mode
+npm run test:watch
+
+# Coverage
+npm run test:cov
+
+# E2E tests
+npm run test:e2e
+```
+
+## Best Practices Summary
+
+✅ **Separation of Concerns** - Clear module boundaries  
+✅ **DRY Principle** - Reusable components and utilities  
+✅ **Security First** - Secure password hashing and token management  
+✅ **Type Safety** - Full TypeScript support with strict types  
+✅ **Error Handling** - Consistent error responses  
+✅ **Documentation** - Comprehensive JSDoc comments  
+✅ **Configuration** - Centralized and environment-aware  
+✅ **Dependency Injection** - Loose coupling and testability  
+✅ **Logging** - Structured logging with Winston  
+✅ **Repository Pattern** - Abstracted data access layer  
+✅ **Modular Design** - Feature-based modules  
+✅ **Maintainability** - Clean code and clear patterns  
+
+## Notes
+
+- All documentation is in English
+- Code follows NestJS conventions and best practices
+- Environment-specific configurations are properly separated
+- Security best practices are implemented throughout
+- TypeScript strict mode is enabled
+- JSDoc comments provide comprehensive method documentation
+- Logging is configured for both development and production environments
